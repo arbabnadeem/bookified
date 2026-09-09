@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
 import React from "react";
 
 const navItems = [
@@ -45,6 +46,13 @@ const Navbar = () => {
               </Link>
             );
           })}
+
+          <Show when="signed-out">
+            <SignInButton />
+          </Show>
+          <Show when="signed-in">
+            <UserButton />
+          </Show>
         </nav>
       </div>
     </header>
