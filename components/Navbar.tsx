@@ -15,7 +15,7 @@ import React from "react";
 
 const navItems = [
   { label: "Library", href: "/" },
-  { label: "Add New", href: "/book/new" },
+  { label: "Add New", href: "/books/new" },
 ];
 
 const Navbar = () => {
