@@ -18,7 +18,7 @@ const HeroSection = () => {
               Listen, learn, and discuss your favorite reads.
             </p>
             <Link
-              href="/book/new"
+              href="/books/new"
               className="library-cta-primary mt-4 flex items-center justify-center"
             >
               <span className="text-3xl font-light md-1 mr-2">+</span>
