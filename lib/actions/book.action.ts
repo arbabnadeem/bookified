@@ -17,9 +17,13 @@ export const checkBookExists = async (title: string) => {
     if (existingBook) {
       return {
         success: true,
-        data: serializeData(existingBook),
+        book: serializeData(existingBook),
       };
     }
+
+    return {
+      exists: false,
+    };
   } catch (error) {
     console.error("error checking book existing", error);
     return {
@@ -101,6 +105,7 @@ export const saveBookSegments = async (
 
     return {
       success: false,
+      error: error,
     };
   }
 };

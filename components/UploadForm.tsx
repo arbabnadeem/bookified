@@ -19,21 +19,23 @@ import FileUploader from "./FileUploader";
 import VoiceSelector from "./VoiceSelector";
 import LoadingOverlay from "./LoadingOverlay";
 import { useAuth } from "@clerk/nextjs";
-// import { toast } from "sonner";
-// import {
-//   checkBookExists,
-//   createBook,
-//   saveBookSegments,
-// } from "@/lib/actions/book.actions";
-// import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import {
+  checkBookExists,
+  createBook,
+  saveBookSegments,
+} from "@/lib/actions/book.action";
+import { useRouter } from "next/navigation";
+import { parsePDFFile } from "@/lib/utils";
+import { upload } from "@vercel/blob/client";
 // import { parsePDFFile } from "@/lib/utils";
 // import { upload } from "@vercel/blob/client";
 
 const UploadForm = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
-  //   const { userId } = useAuth();
-  //   const router = useRouter();
+  const { userId } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
     setIsMounted(true);
@@ -51,11 +53,107 @@ const UploadForm = () => {
   });
 
   const onSubmit = async (data: BookUploadFormValues) => {
-    setIsSubmitting(true);
-    console.log(data);
+    if (!userId) {
+      return toast.error("please login to upload books");
+    }
 
-    await new Promise((e) => setTimeout(e, 3000));
-    setIsSubmitting(false);
+    setIsSubmitting(true);
+
+    // postHog too track book updates
+
+    try {
+      const existsCheck = await checkBookExists(data.title);
+
+      if (existsCheck?.exists && existsCheck.book) {
+        toast.info("book with same title already");
+        form.reset();
+        router.push(`/book/${existsCheck.book.slug}`);
+        return;
+      }
+
+      const fileTitle = data.title.replace(/\s+/g, "-").toLowerCase();
+      const pdfFile = data.pdfFile[0];
+
+      const parsedPDf = await parsePDFFile(pdfFile);
+
+      if (parsePDFFile.content.length === 0) {
+        toast.error(
+          "failed to parse PDF. please try again with a different file.",
+        );
+        return;
+      }
+
+      const uploadedPdfBlob = await upload(fileTitle, pdfFile, {
+        access: "public",
+        handleUploadUrl: "/api/upload",
+        contentType: "application/pdf",
+      });
+
+      let coverUrl: string;
+
+      if (data.coverImage && data.coverImage.length > 0) {
+        const coverFile = data.coverImage[0];
+        const uploadCoverBlob = await upload(
+          `${fileTitle}_cover.png`,
+          coverFile,
+          {
+            access: "public",
+            handleUploadUrl: "/api/upload",
+            contentType: coverFile.type,
+          },
+        );
+        coverUrl = uploadedPdfBlob.url;
+      } else {
+        const response = await fetch(parsedPDf.cover);
+        const blob = await response.blob();
+
+        const uploadedCoverBlob = await upload(`${fileTitle}_cover.png`, blob, {
+          access: "public",
+          handleUploadUrl: "/api/upload",
+          contentType: "image/png",
+        });
+        coverUrl = uploadedCoverBlob.url;
+      }
+
+      const book = await createBook({
+        clerkId: userId,
+        title: data.title,
+        author: data.author,
+        persona: data.persona,
+        fileURL: uploadedPdfBlob.url,
+        fileBlobKey: uploadedPdfBlob.pathname,
+        coverURL: coverUrl,
+        fileSize: pdfFile.size,
+      });
+
+      if (!book.success) throw new Error("failed to create book");
+
+      if (book.alreadyExists) {
+        toast.info("book with same title already exist.");
+        form.reset();
+        router.push(`/book/${existsCheck.book.slug}`);
+        return;
+      }
+
+      const segments = await saveBookSegments(
+        book.data._id,
+        userId,
+        parsedPDf.content,
+      );
+
+      if (!segments.success) {
+        toast.error("Failed to save book segments");
+        throw new Error("Failed to save book segments");
+      }
+
+      form.reset();
+      router.push("/");
+    } catch (error) {
+      console.log(error);
+      toast.error("field to upload book. please try again later");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (!isMounted) return null;
